@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
-with open("skGLMM/version.py") as f:
+with open("pyGLMM/version.py") as f:
     exec(f.read())
 
 extra_setuptools_args = dict(
@@ -17,8 +17,8 @@ setup(
     author_email ='stan0625@uw.com',
     url = 'git@github.com:stanbiryukov/sklearn-GLMM.git',
     install_requires = requirements,
-    package_data = {'skGLMM':['resources/*']},
-    packages = find_packages(exclude=['skGLMM/tests']),
+    package_data = {'pyGLMM':['resources/*']},
+    packages = find_packages(exclude=['pyGLMM/tests']),
     license = 'MIT',
     description='sklearn-GLMM: scikit-learn wrapper for generalized linear mixed model methods in R',
     long_description= "sklearn-GLMM makes it easy to interface with GLMM libraries in R. It was specifically designed to work with BRMS and LME4 but is also flexible enough to work with other stats libraries",
