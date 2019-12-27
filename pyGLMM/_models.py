@@ -3,9 +3,11 @@ import pandas as pd
 import rpy2.robjects.packages as r
 import tempfile
 import time
+
 from rpy2.robjects import pandas2ri
 from rpy2.robjects.packages import STAP
 from sklearn.base import BaseEstimator, RegressorMixin
+from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
 class skGLMM(BaseEstimator, RegressorMixin):
     """
@@ -148,9 +150,7 @@ class skGLMM(BaseEstimator, RegressorMixin):
         return -np.sqrt(
             np.mean(
                 np.power(
-                    self.predict(X, n_draws=0).reshape(-1, 1)
-                    - y.reshape(-1, 1),
-                    2,
+                    self.predict(X, n_draws=0).reshape(-1, 1) - y.reshape(-1, 1), 2
                 )
             )
         )
