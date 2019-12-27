@@ -18,7 +18,7 @@ class skGLMM(BaseEstimator, RegressorMixin):
     """
 
     def __init__(
-        self, r_call, x_scalar=StandardScaler(), y_scalar=FunctionTransformer()
+        self, r_call, x_scalar=StandardScaler(), y_scalar=FunctionTransformer(validate=True)
     ):
         self.r_call = r_call
         self.x_scalar = x_scalar
