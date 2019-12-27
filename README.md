@@ -48,3 +48,29 @@ phatdraws = ml.predict(df[['IL6', 'CRP', 'CancerStage', 'LengthofStay', 'Experie
 # Also returns R style summary
 ml.summary()
 ```
+```
+ Family: bernoulli 
+  Links: mu = logit 
+Formula: remission ~ IL6 + CRP + CancerStage + LengthofStay + Experience + (1 | DID) 
+   Data: df (Number of observations: 8525) 
+Samples: 4 chains, each with iter = 1000; warmup = 500; thin = 1;
+         total post-warmup samples = 2000
+
+Group-Level Effects: 
+~DID (Number of levels: 407) 
+              Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+sd(Intercept)     1.99      0.10     1.80     2.20 1.00      401      746
+
+Population-Level Effects: 
+             Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+Intercept       -1.48      0.10    -1.68    -1.28 1.00      259      615
+IL6             -0.15      0.03    -0.21    -0.09 1.00     2717     1470
+CRP             -0.06      0.03    -0.12    -0.00 1.00     1867     1228
+CancerStage     -0.29      0.03    -0.35    -0.22 1.00     1935     1258
+LengthofStay    -0.31      0.03    -0.38    -0.25 1.00     1905     1377
+Experience       0.49      0.12     0.25     0.73 1.02      130      136
+
+Samples were drawn using sampling(NUTS). For each parameter, Eff.Sample 
+is a crude measure of effective sample size, and Rhat is the potential 
+scale reduction factor on split chains (at convergence, Rhat = 1).
+```
