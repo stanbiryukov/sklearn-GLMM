@@ -1,6 +1,10 @@
 # sklearn-GLMM
 scikit-learn wrapper for generalized linear mixed model methods in R
 
+This is a lightweight wrapper that enables fitting generalized linear multivariate multilevel models from python.
+It easily enables fitting bayesian models via brms calls: https://github.com/paul-buerkner/brms
+It is flexible enough to extend to other R based models and is designed to be as compatible to scikit-learn syntax as possible.
+
 Installation
 ```python
 pip install git+https://github.com/stanbiryukov/sklearn-GLMM
