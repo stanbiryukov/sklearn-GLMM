@@ -37,8 +37,7 @@ df = df.apply(lambda x: pd.factorize(x)[0] if np.issubdtype(x.dtype, np.number) 
 from pyGLMM import skGLMM
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 ml = skGLMM(x_scalar = StandardScaler(), y_scalar = FunctionTransformer(validate=True), 
-  r_call = "brm(remission ~ IL6 + CRP + CancerStage + LengthofStay + Experience + (1 | DID), 
-  data = df, family = bernoulli(), algorithm='sampling', iter = 1000, chains = 4, cores = 4)")
+  r_call = "brm(remission ~ IL6 + CRP + CancerStage + LengthofStay + Experience + (1 | DID), data = df, family = bernoulli(), algorithm='sampling', iter = 1000, chains = 4, cores = 4)")
 
 ml.fit(df[['IL6', 'CRP', 'CancerStage', 'LengthofStay', 'Experience', 'DID']], df['remission'])
 phat = ml.predict(df[['IL6', 'CRP', 'CancerStage', 'LengthofStay', 'Experience', 'DID']])
