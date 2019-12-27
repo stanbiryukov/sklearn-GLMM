@@ -4,7 +4,7 @@ scikit-learn wrapper for generalized linear mixed model methods in R
 This is a lightweight wrapper that enables fitting generalized linear multivariate multilevel models from python via R.
 It easily enables fitting bayesian models via brms calls: https://github.com/paul-buerkner/brms
 
-It is flexible enough to extend to other R based models and is designed to be as compatible to scikit-learn syntax as possible.
+It is flexible enough to extend to other R based models and is designed to be as compatible with scikit-learn syntax as possible.
 
 It's specifically built against rpy2==2.8.6 to enable both python2 and 3 support.
 
