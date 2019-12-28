@@ -9,30 +9,46 @@ from rpy2.robjects.packages import STAP
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
+
 class skGLMM(BaseEstimator, RegressorMixin):
     """
-    Wrapper for BRMS & LME4 type models. 
+    Wrapper for BRMS & LME4 type models.
     Designed to be flexible to work with other base stats regressors (glm) and more R models.
     Built against rpy2==2.8.6 for python2 support.
     Since this is based on a formula in r_call, the caveat is that dataframe columns need to be passed to the methods, not numpy arrays.
+
+    Parameters
+    ----------
+    r_call : {string}, data parameter in R formula must be 'df'.
+        example: 'brm(count ~ zAge + zBase * Trt + (1|patient), data = df, family = poisson())'
+    x_scalar : {sklearn.preprocessing object}. 
+        Transforms done to predictors before R model invoked and inverted upon predict.
+        default: StandardScaler()
+    y_scalar : {sklearn.preprocessing object}. 
+        Transforms done to target before R model invoked and inverted upon predict.
+        default: FunctionTransformer(validate=True)
+    pacman_call: {string}, pacman load to extend wrapper to other model types.
+        default: 'pacman::p_load(lme4)'
     """
 
     def __init__(
-        self, r_call, x_scalar=StandardScaler(), y_scalar=FunctionTransformer(validate=True)
+        self,
+        r_call,
+        pacman_call="pacman::p_load(lme4)",
+        x_scalar=StandardScaler(),
+        y_scalar=FunctionTransformer(validate=True),
     ):
         self.r_call = r_call
+        self.pacman_call = pacman_call
         self.x_scalar = x_scalar
         self.y_scalar = y_scalar
 
     def get_r(self):
         r_fct_string = """
-        fit_ <- function(r_call, dfpath) {
-        library(rstan)
-        library(parallel)
-        library(brms)
-        library(lme4)
-        library(feather)
-        library(data.table)
+        fit_ <- function(r_call, dfpath, pcmstr) {
+        library(pacman)
+        pacman::p_load(rstan, parallel, brms, lme4, feather, data.table, dplyr, merTools, pbmcapply, lme4)
+        eval(parse(text=pcmstr))
         rstan_options(auto_write = TRUE)
         options(mc.cores = parallel::detectCores())
         # print(R.Version())
@@ -48,14 +64,10 @@ class skGLMM(BaseEstimator, RegressorMixin):
         capture.output( summary(fit), file=gsub(".rds", ".txt", fpath), append=TRUE)
         return (fpath)
         }
-        predict_ <- function(model, newdfpath, n_draws, parallel) {
-        library(data.table)
-        library(parallel)
-        library(dplyr)
-        library(feather)
-        library(merTools)
-        library(rstan)
-        library(pbmcapply)
+        predict_ <- function(model, newdfpath, n_draws, parallel, pcmstr) {
+        library(pacman)
+        pacman::p_load(rstan, parallel, brms, lme4, feather, data.table, dplyr, merTools, pbmcapply, lme4)
+        eval(parse(text=pcmstr))
         numCores <- detectCores() - 1
         parpred <- function(dfc, model) {
             return (data.table(predict(model, newdata=dfc, type='response')))[,1]
@@ -127,7 +139,9 @@ class skGLMM(BaseEstimator, RegressorMixin):
         self.ml = STAP(self.get_r(), "r_fct_string")
         print("Starting Fit.")
         start = time.time()
-        self.ml_ = self.ml.fit_(self.r_call, dfpath=self.dfpath)
+        self.ml_ = self.ml.fit_(
+            self.r_call, dfpath=self.dfpath, pcmstr=self.pacman_call
+        )
         print("R Fit Done. It took %.0f seconds" % (time.time() - start))
         f = open(self.ml_[0].replace(".rds", ".txt"))
         self._summary = f.read().splitlines()
@@ -139,7 +153,9 @@ class skGLMM(BaseEstimator, RegressorMixin):
         dfout = pd.DataFrame(X_out, columns=X.columns)
         self.dfoutpath = self.dir + "/data_out.feather"
         dfout.to_feather(self.dfoutpath)
-        out_ = self.ml.predict_(self.ml_, self.dfoutpath, n_draws, parallel)
+        out_ = self.ml.predict_(
+            self.ml_, self.dfoutpath, n_draws, parallel, self.pacman_call
+        )
         pred = pandas2ri.ri2py_dataframe(out_)
         return self.y_scalar.inverse_transform(pred.values)
 
@@ -150,7 +166,11 @@ class skGLMM(BaseEstimator, RegressorMixin):
         return -np.sqrt(
             np.mean(
                 np.power(
-                    self.predict(X, n_draws=0).reshape(-1, 1) - y.reshape(-1, 1), 2
+                    np.subtract(
+                        self.predict(X, n_draws=0).reshape(-1, 1),
+                        y.values.reshape(-1, 1),
+                    ),
+                    2,
                 )
             )
         )
@@ -158,3 +178,11 @@ class skGLMM(BaseEstimator, RegressorMixin):
     def summary(self):
         for line in self._summary:
             print(line)
+
+    def get_params(self, deep=True):
+        return {"y_scalar": self.y_scalar, "x_scalar": self.x_scalar}
+
+    def set_params(self, **parameters):
+        for parameter, value in parameters.items():
+            setattr(self, parameter, value)
+        return self
