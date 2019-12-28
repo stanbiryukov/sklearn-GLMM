@@ -94,7 +94,7 @@ class skGLMM(BaseEstimator, RegressorMixin):
                     preddraws = preddraws %>% dplyr::rename_at(vars(starts_with('V')),  funs(sub('V', 'draw_', .)))
                 }
             } else {
-                preddraws = (data.table(predict(mdl, newdata=newdf, type='response')))
+                preddraws = (data.table(predict(mdl, newdata=newdf, type='response')))[,1]
             }
         }
         # predpath = tempfile(pattern = "", fileext = ".feather")
