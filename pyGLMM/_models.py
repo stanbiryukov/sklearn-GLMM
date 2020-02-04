@@ -77,7 +77,7 @@ class skGLMM(BaseEstimator, RegressorMixin):
         library(pacman)
         pacman::p_load(rstan, parallel, brms, lme4, feather, data.table, dplyr, merTools, pbmcapply, lme4)
         eval(parse(text=pcmstr))
-        numCores <- detectCores() - 1
+        numCores <- as.integer(max(detectCores() / 2, 1))
         parpred <- function(dfc, model) {
             return (data.table(predict(model, newdata=dfc, type='response')))[,1]
         }
