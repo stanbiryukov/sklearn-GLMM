@@ -190,7 +190,13 @@ class skGLMM(BaseEstimator, RegressorMixin):
             print(line)
 
     def get_params(self, deep=True):
-        return {"y_scaler": self.y_scaler, "x_scaler": self.x_scaler}
+        return {
+            "y_scaler": self.y_scaler,
+            "x_scaler": self.x_scaler,
+            "r_call": self.r_call,
+            "pacman_call": self.pacman_call,
+            "outdir": self.outdir,
+        }
 
     def set_params(self, **parameters):
         for parameter, value in parameters.items():
