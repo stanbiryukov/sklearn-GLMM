@@ -3,6 +3,7 @@ import pandas as pd
 import rpy2.robjects.packages as r
 import tempfile
 import time
+import uuid
 
 from rpy2.robjects import pandas2ri
 from rpy2.robjects.packages import STAP
@@ -21,6 +22,7 @@ class skGLMM(BaseEstimator, RegressorMixin):
     ----------
     r_call : {string}, data parameter in R formula must be 'df'.
         example: 'brm(count ~ zAge + zBase * Trt + (1|patient), data = df, family = poisson())'
+    outdir : {string}, directory where to save R/Python IO and R model.
     x_scalar : {sklearn.preprocessing object}. 
         Transforms done to predictors before R model invoked and inverted upon predict.
         default: StandardScaler()
@@ -34,18 +36,23 @@ class skGLMM(BaseEstimator, RegressorMixin):
     def __init__(
         self,
         r_call,
+        outdir=tempfile.gettempdir(),
         pacman_call="pacman::p_load(lme4)",
         x_scalar=StandardScaler(),
         y_scalar=FunctionTransformer(validate=True),
     ):
+        super(skGLMM, self).__init__()
         self.r_call = r_call
+        self.outdir = outdir
         self.pacman_call = pacman_call
         self.x_scalar = x_scalar
         self.y_scalar = y_scalar
+        os.system("mkdir -p -m 777 {}".format(outdir))
 
     def get_r(self):
         r_fct_string = """
         fit_ <- function(r_call, dfpath, pcmstr) {
+        set.seed(8502) # set random seed in fitting process
         library(pacman)
         pacman::p_load(rstan, parallel, brms, lme4, feather, data.table, dplyr, merTools, pbmcapply, lme4)
         eval(parse(text=pcmstr))
@@ -57,7 +64,7 @@ class skGLMM(BaseEstimator, RegressorMixin):
         # df = df[, names(df) := lapply(.SD, as.numeric)]
         fit = eval(parse(text=r_call))
         print(summary(fit))
-        fpath = tempfile(pattern = "", fileext = ".rds")
+        fpath = paste0(dirname(dfpath), '/', tools::file_path_sans_ext(basename(dfpath)), 'model.rds')
         # save the model
         saveRDS(fit, fpath)
         # save summary
@@ -65,6 +72,7 @@ class skGLMM(BaseEstimator, RegressorMixin):
         return (fpath)
         }
         predict_ <- function(model, newdfpath, n_draws, parallel, pcmstr) {
+        set.seed(2063) # different random seed in predict for reproducibility
         library(pacman)
         pacman::p_load(rstan, parallel, brms, lme4, feather, data.table, dplyr, merTools, pbmcapply, lme4)
         eval(parse(text=pcmstr))
@@ -117,8 +125,11 @@ class skGLMM(BaseEstimator, RegressorMixin):
         """
         return r_fct_string
 
+    def get_ml(self):
+        ml = STAP(self.get_r(), "r_fct_string")
+        return ml
+
     def fit(self, X_in, z_in):
-        self.dir = tempfile.gettempdir()
         depv = self.r_call.split("~")[0]
         self.dep_var = depv.split("(")[1].strip()
         self.y_scalar.fit(z_in.values.reshape(-1, 1))
@@ -132,31 +143,32 @@ class skGLMM(BaseEstimator, RegressorMixin):
             ],
             axis=1,
         )
-        self.dfpath = self.dir + "/data_in.feather"
-        dfin.to_feather(self.dfpath)
+        dfpath = "{}/{}.feather".format(self.outdir, uuid.uuid4())
+        dfin.to_feather(dfpath)
         # print(dfin.head())
         # r_dfin = pandas2ri.py2ri(dfin)
-        self.ml = STAP(self.get_r(), "r_fct_string")
+        ml = self.get_ml()
         print("Starting Fit.")
         start = time.time()
-        self.ml_ = self.ml.fit_(
-            self.r_call, dfpath=self.dfpath, pcmstr=self.pacman_call
-        )
+        self.ml_ = ml.fit_(self.r_call, dfpath=dfpath, pcmstr=self.pacman_call)
         print("R Fit Done. It took %.0f seconds" % (time.time() - start))
         f = open(self.ml_[0].replace(".rds", ".txt"))
         self._summary = f.read().splitlines()
         f.close()
+        # clean up I/O
+        os.remove(dfpath)
+        os.remove(self.ml_[0].replace(".rds", ".txt"))
 
     def predict(self, X, n_draws=0, parallel=False):
         X_out = self.x_scalar.transform(X)
         # r_dfout = pandas2ri.py2ri(pd.DataFrame(X_out, columns = X.columns))
         dfout = pd.DataFrame(X_out, columns=X.columns)
-        self.dfoutpath = self.dir + "/data_out.feather"
-        dfout.to_feather(self.dfoutpath)
-        out_ = self.ml.predict_(
-            self.ml_, self.dfoutpath, n_draws, parallel, self.pacman_call
-        )
+        dfoutpath = "{}/{}.feather".format(self.outdir, uuid.uuid4())
+        dfout.to_feather(dfoutpath)
+        ml = self.get_ml()
+        out_ = ml.predict_(self.ml_, dfoutpath, n_draws, parallel, self.pacman_call)
         pred = pandas2ri.ri2py_dataframe(out_)
+        os.remove(dfoutpath)
         return self.y_scalar.inverse_transform(pred.values)
 
     def score(self, X, y):
