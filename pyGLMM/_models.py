@@ -1,6 +1,6 @@
 import numpy as np
+import os
 import pandas as pd
-import rpy2.robjects.packages as r
 import tempfile
 import time
 import uuid
@@ -22,11 +22,12 @@ class skGLMM(BaseEstimator, RegressorMixin):
     ----------
     r_call : {string}, data parameter in R formula must be 'df'.
         example: 'brm(count ~ zAge + zBase * Trt + (1|patient), data = df, family = poisson())'
-    outdir : {string}, directory where to save R/Python IO and R model.
-    x_scalar : {sklearn.preprocessing object}. 
+    outdir : {string}, directory where to save R/Python IO and R model. Defaults to tempfile's tempdir search, but note that for the 
+                        model to be pickled and used later, this path must exist since the R model is saved in this location. 
+    x_scaler : {sklearn.preprocessing object}.
         Transforms done to predictors before R model invoked and inverted upon predict.
         default: StandardScaler()
-    y_scalar : {sklearn.preprocessing object}. 
+    y_scaler : {sklearn.preprocessing object}. 
         Transforms done to target before R model invoked and inverted upon predict.
         default: FunctionTransformer(validate=True)
     pacman_call: {string}, pacman load to extend wrapper to other model types.
@@ -38,15 +39,15 @@ class skGLMM(BaseEstimator, RegressorMixin):
         r_call,
         outdir=tempfile.gettempdir(),
         pacman_call="pacman::p_load(lme4)",
-        x_scalar=StandardScaler(),
-        y_scalar=FunctionTransformer(validate=True),
+        x_scaler=StandardScaler(),
+        y_scaler=FunctionTransformer(validate=True),
     ):
         super(skGLMM, self).__init__()
         self.r_call = r_call
         self.outdir = outdir
         self.pacman_call = pacman_call
-        self.x_scalar = x_scalar
-        self.y_scalar = y_scalar
+        self.x_scaler = x_scaler
+        self.y_scaler = y_scaler
         os.system("mkdir -p -m 777 {}".format(outdir))
 
     def get_r(self):
@@ -132,10 +133,10 @@ class skGLMM(BaseEstimator, RegressorMixin):
     def fit(self, X_in, z_in):
         depv = self.r_call.split("~")[0]
         self.dep_var = depv.split("(")[1].strip()
-        self.y_scalar.fit(z_in.values.reshape(-1, 1))
-        yvals = self.y_scalar.transform(z_in.values.reshape(-1, 1))
-        self.x_scalar.fit(X_in.values)
-        xvals = self.x_scalar.transform(X_in.values)
+        self.y_scaler.fit(z_in.values.reshape(-1, 1))
+        yvals = self.y_scaler.transform(z_in.values.reshape(-1, 1))
+        self.x_scaler.fit(X_in.values)
+        xvals = self.x_scaler.transform(X_in.values)
         dfin = pd.concat(
             [
                 pd.DataFrame(yvals, columns=[self.dep_var]),
@@ -145,8 +146,6 @@ class skGLMM(BaseEstimator, RegressorMixin):
         )
         dfpath = "{}/{}.feather".format(self.outdir, uuid.uuid4())
         dfin.to_feather(dfpath)
-        # print(dfin.head())
-        # r_dfin = pandas2ri.py2ri(dfin)
         ml = self.get_ml()
         print("Starting Fit.")
         start = time.time()
@@ -160,8 +159,7 @@ class skGLMM(BaseEstimator, RegressorMixin):
         os.remove(self.ml_[0].replace(".rds", ".txt"))
 
     def predict(self, X, n_draws=0, parallel=False):
-        X_out = self.x_scalar.transform(X)
-        # r_dfout = pandas2ri.py2ri(pd.DataFrame(X_out, columns = X.columns))
+        X_out = self.x_scaler.transform(X)
         dfout = pd.DataFrame(X_out, columns=X.columns)
         dfoutpath = "{}/{}.feather".format(self.outdir, uuid.uuid4())
         dfout.to_feather(dfoutpath)
@@ -169,7 +167,7 @@ class skGLMM(BaseEstimator, RegressorMixin):
         out_ = ml.predict_(self.ml_, dfoutpath, n_draws, parallel, self.pacman_call)
         pred = pandas2ri.ri2py_dataframe(out_)
         os.remove(dfoutpath)
-        return self.y_scalar.inverse_transform(pred.values)
+        return self.y_scaler.inverse_transform(pred.values)
 
     def score(self, X, y):
         """
@@ -192,7 +190,7 @@ class skGLMM(BaseEstimator, RegressorMixin):
             print(line)
 
     def get_params(self, deep=True):
-        return {"y_scalar": self.y_scalar, "x_scalar": self.x_scalar}
+        return {"y_scaler": self.y_scaler, "x_scaler": self.x_scaler}
 
     def set_params(self, **parameters):
         for parameter, value in parameters.items():

@@ -14,8 +14,9 @@ pip install git+https://github.com/stanbiryukov/sklearn-GLMM
 ```
 
 
-Under the hood, the class relies on the following R libraries, so for it to work properly they must be installed in the R environment linked to rpy2:
+Under the hood, the class relies on the R libraries listed below, so for it to work properly they must be installed in the R environment linked to rpy2. R's pacman will attempt to install any missing libraries but rstan usually requires system specific configuration.
 ```R
+library(pacman)
 library(rstan)
 library(parallel)
 library(brms)
@@ -36,7 +37,7 @@ df = df.apply(lambda x: pd.factorize(x)[0] if np.issubdtype(x.dtype, np.number) 
 
 from pyGLMM import skGLMM
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
-ml = skGLMM(x_scalar = StandardScaler(), y_scalar = FunctionTransformer(validate=True), 
+ml = skGLMM(x_scaler = StandardScaler(), y_scaler = FunctionTransformer(validate=True), 
             r_call = "brm(remission ~ IL6 + CRP + CancerStage + LengthofStay + Experience + (1 | DID), data = df, family = bernoulli(), algorithm='sampling', iter = 1000, chains = 4, cores = 4)")
 
 ml.fit(df[['IL6', 'CRP', 'CancerStage', 'LengthofStay', 'Experience', 'DID']], df['remission'])
