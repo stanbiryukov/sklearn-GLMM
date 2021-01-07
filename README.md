@@ -21,7 +21,6 @@ library(rstan)
 library(parallel)
 library(brms)
 library(lme4)
-library(feather)
 library(data.table)
 library(dplyr)
 library(merTools)
@@ -31,7 +30,9 @@ library(pbmcapply)
 Demonstrate by example:
 ```python
 # df is your pandas dataframe with predictors and target column
+import numpy as np
 import pandas as pd
+
 df = pd.read_csv('https://stats.idre.ucla.edu/stat/data/hdp.csv')
 df = df.apply(lambda x: pd.factorize(x)[0] if np.issubdtype(x.dtype, np.number) is False else x) # factorize some columns
 
