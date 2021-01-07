@@ -1,10 +1,10 @@
-import numpy as np
 import os
-import pandas as pd
 import tempfile
 import time
 import uuid
 
+import numpy as np
+import pandas as pd
 from rpy2.robjects import pandas2ri
 from rpy2.robjects.packages import STAP
 from sklearn.base import BaseEstimator, RegressorMixin
@@ -22,12 +22,12 @@ class skGLMM(BaseEstimator, RegressorMixin):
     ----------
     r_call : {string}, data parameter in R formula must be 'df'.
         example: 'brm(count ~ zAge + zBase * Trt + (1|patient), data = df, family = poisson())'
-    outdir : {string}, directory where to save R/Python IO and R model. Defaults to tempfile's tempdir search, but note that for the 
-                        model to be pickled and used later, this path must exist since the R model is saved in this location. 
+    outdir : {string}, directory where to save R/Python IO and R model. Defaults to tempfile's tempdir search, but note that for the
+                        model to be pickled and used later, this path must exist since the R model is saved in this location.
     x_scaler : {sklearn.preprocessing object}.
         Transforms done to predictors before R model invoked and inverted upon predict.
-        default: StandardScaler()
-    y_scaler : {sklearn.preprocessing object}. 
+        default: FunctionTransformer(validate=True)
+    y_scaler : {sklearn.preprocessing object}.
         Transforms done to target before R model invoked and inverted upon predict.
         default: FunctionTransformer(validate=True)
     pacman_call: {string}, pacman load to extend wrapper to other model types.
@@ -39,7 +39,7 @@ class skGLMM(BaseEstimator, RegressorMixin):
         r_call,
         outdir=tempfile.gettempdir(),
         pacman_call="pacman::p_load(lme4)",
-        x_scaler=StandardScaler(),
+        x_scaler=FunctionTransformer(validate=True),
         y_scaler=FunctionTransformer(validate=True),
     ):
         super(skGLMM, self).__init__()
@@ -55,12 +55,12 @@ class skGLMM(BaseEstimator, RegressorMixin):
         fit_ <- function(r_call, dfpath, pcmstr) {
         set.seed(8502) # set random seed in fitting process
         library(pacman)
-        pacman::p_load(rstan, parallel, brms, lme4, feather, data.table, dplyr, merTools, pbmcapply, lme4)
+        pacman::p_load(rstan, parallel, brms, lme4, data.table, dplyr, merTools, pbmcapply, lme4)
         eval(parse(text=pcmstr))
         rstan_options(auto_write = TRUE)
         options(mc.cores = parallel::detectCores())
         # print(R.Version())
-        df = read_feather(dfpath)
+        df = fread(dfpath)
         df = data.table(df)
         # df = df[, names(df) := lapply(.SD, as.numeric)]
         fit = eval(parse(text=r_call))
@@ -75,7 +75,7 @@ class skGLMM(BaseEstimator, RegressorMixin):
         predict_ <- function(model, newdfpath, n_draws, parallel, pcmstr) {
         set.seed(2063) # different random seed in predict for reproducibility
         library(pacman)
-        pacman::p_load(rstan, parallel, brms, lme4, feather, data.table, dplyr, merTools, pbmcapply, lme4)
+        pacman::p_load(rstan, parallel, brms, lme4, data.table, dplyr, merTools, pbmcapply, lme4)
         eval(parse(text=pcmstr))
         numCores <- as.integer(max(detectCores() / 2, 1))
         parpred <- function(dfc, model) {
@@ -87,7 +87,7 @@ class skGLMM(BaseEstimator, RegressorMixin):
         rstan_options(auto_write = TRUE)
         options(mc.cores = parallel::detectCores())
         mdl = readRDS(model)
-        newdf = read_feather(newdfpath)
+        newdf = fread(newdfpath)
         newdf = data.table(newdf)
         spl.dt <- split( newdf , cut(1:nrow(newdf), min(nrow(newdf), numCores)) )
         if (parallel==TRUE) {
@@ -118,9 +118,6 @@ class skGLMM(BaseEstimator, RegressorMixin):
                 preddraws = (data.table(predict(mdl, newdata=newdf, type='response')))[,1]
             }
         }
-        # predpath = tempfile(pattern = "", fileext = ".feather")
-        # write_feather(preddraws, predpath)
-        # use r2py io for this part: https://issues.apache.org/jira/browse/ARROW-1907
         return(preddraws)
         }
         """
@@ -144,8 +141,8 @@ class skGLMM(BaseEstimator, RegressorMixin):
             ],
             axis=1,
         )
-        dfpath = "{}/{}.feather".format(self.outdir, uuid.uuid4())
-        dfin.to_feather(dfpath)
+        dfpath = "{}/{}.csv".format(self.outdir, uuid.uuid4())
+        dfin.to_csv(dfpath, index=False)
         ml = self.get_ml()
         print("Starting Fit.")
         start = time.time()
@@ -161,8 +158,8 @@ class skGLMM(BaseEstimator, RegressorMixin):
     def predict(self, X, n_draws=0, parallel=False):
         X_out = self.x_scaler.transform(X)
         dfout = pd.DataFrame(X_out, columns=X.columns)
-        dfoutpath = "{}/{}.feather".format(self.outdir, uuid.uuid4())
-        dfout.to_feather(dfoutpath)
+        dfoutpath = "{}/{}.csv".format(self.outdir, uuid.uuid4())
+        dfout.to_csv(dfoutpath)
         ml = self.get_ml()
         out_ = ml.predict_(self.ml_, dfoutpath, n_draws, parallel, self.pacman_call)
         pred = pandas2ri.ri2py_dataframe(out_)
